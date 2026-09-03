@@ -1,0 +1,9 @@
+IT Security Policy
+
+All employees must use strong passwords with at least 12 characters.
+Password sharing is strictly prohibited.
+Two-factor authentication (2FA) is mandatory for email and HR portal login.
+Official data must not be stored on personal Google Drive or USB drives.
+Suspicious emails should be reported to it-security@company.com immediately.
+Lost or stolen laptop must be reported to IT within 1 hour.
+Software installation requires IT admin approval.
