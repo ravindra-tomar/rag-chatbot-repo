@@ -30,6 +30,7 @@ def add_chunks(
     *,
     doc_id: str,
     filename: str,
+    user_id: int,
     chunks: list[str],
     embeddings: list[list[float]],
 ) -> int:
@@ -43,7 +44,12 @@ def add_chunks(
     collection = get_collection()
     ids = [f"{doc_id}_{i}" for i in range(len(chunks))]
     metadatas = [
-        {"doc_id": doc_id, "filename": filename, "chunk_index": i}
+        {
+            "doc_id": doc_id,
+            "filename": filename,
+            "user_id": user_id,
+            "chunk_index": i,
+        }
         for i in range(len(chunks))
     ]
 
@@ -56,7 +62,9 @@ def add_chunks(
     return len(chunks)
 
 
-def search_chunks(query_embedding: list[float], top_k: int | None = None) -> list[dict]:
+def search_chunks(
+    query_embedding: list[float], top_k: int | None = None, user_id: int | None = None
+) -> list[dict]:
     """Query vector se sabse close chunks nikaalo."""
     k = top_k or settings.TOP_K
     collection = get_collection()
@@ -64,9 +72,15 @@ def search_chunks(query_embedding: list[float], top_k: int | None = None) -> lis
     if collection.count() == 0:
         return []
 
+    where = {"user_id": user_id} if user_id is not None else None
+    total_count = collection.count()
+    if total_count == 0:
+        return []
+
     result = collection.query(
         query_embeddings=[query_embedding],
-        n_results=min(k, collection.count()),
+        n_results=min(k, total_count),
+        where=where,
         include=["documents", "metadatas", "distances"],
     )
 
@@ -88,7 +102,10 @@ def search_chunks(query_embedding: list[float], top_k: int | None = None) -> lis
     return hits
 
 
-def delete_doc(doc_id: str) -> None:
+def delete_doc(doc_id: str, user_id: int | None = None) -> None:
     """Ek document ke saare chunks hatao."""
     collection = get_collection()
-    collection.delete(where={"doc_id": doc_id})
+    where = {"doc_id": doc_id}
+    if user_id is not None:
+        where = {"$and": [{"doc_id": doc_id}, {"user_id": user_id}]}
+    collection.delete(where=where)
