@@ -6,3 +6,10 @@ python-dotenv
 google-genai
 chromadb
 pypdf
+pytest
+httpx
+sqlalchemy
+python-jose[cryptography]
+email-validator
+alembic
+psycopg[binary]

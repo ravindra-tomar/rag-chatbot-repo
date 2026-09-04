@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: rag
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d rag"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      APP_NAME: RAG Chatbot
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?Set GEMINI_API_KEY in .env}
+      CHAT_MODEL: ${CHAT_MODEL:-gemini-3.6-flash}
+      DATABASE_URL: postgresql+psycopg://rag:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/rag
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-10}
+      UPLOAD_DIR: /app/data/uploads
+      CHROMA_PATH: /app/data/chroma
+      CHROMA_COLLECTION: ${CHROMA_COLLECTION:-documents}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-gemini-embedding-001}
+      TOP_K: ${TOP_K:-4}
+    volumes:
+      - uploads_data:/app/data/uploads
+      - chroma_data:/app/data/chroma
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  uploads_data:
+  chroma_data:

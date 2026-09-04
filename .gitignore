@@ -5,6 +5,7 @@ __pycache__/
 .env
 data/uploads/
 data/chroma/
+data/*.db
 *.meta.json
 .tmp/
 tmp*.json

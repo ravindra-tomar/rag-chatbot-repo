@@ -1,13 +1,21 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from app.schemas.chat import ChatRequest, ChatResponse, ChatSource
 from app.services.rag_service import answer_with_rag
+from app.api.v1.auth import get_current_user
+from app.db.database import get_db
+from app.db.models import User
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 @router.post("", response_model=ChatResponse)
-def chat(payload: ChatRequest):
+def chat(
+    payload: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     RAG chat:
     question → retrieve chunks → Gemini grounded answer + sources
@@ -17,6 +25,8 @@ def chat(payload: ChatRequest):
             payload.message,
             top_k=payload.top_k,
             session_id=payload.session_id,
+            user_id=current_user.id,
+            db=db,
         )
         return ChatResponse(
             session_id=result["session_id"],

@@ -5,6 +5,11 @@ class Settings(BaseSettings):
     APP_NAME: str = "RAG Chatbot"
     GEMINI_API_KEY: str = ""
     CHAT_MODEL: str = "gemini-3.6-flash"
+    DATABASE_URL: str = "sqlite:///./data/app.db"
+    POSTGRES_PASSWORD: str = ""
+    SECRET_KEY: str = "change-this-secret-key-in-production"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    MAX_UPLOAD_SIZE_MB: int = 10
 
     # Phase 3: documents
     UPLOAD_DIR: str = "./data/uploads"

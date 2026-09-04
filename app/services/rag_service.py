@@ -2,10 +2,13 @@ import uuid
 
 from google import genai
 from google.genai import types
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.services.embedding_service import embed_query
 from app.services.vector_store import search_chunks
+from app.db.models import ChatMessage, ChatSession
 
 SYSTEM_PROMPT = """You are a helpful RAG assistant.
 Answer ONLY using the provided context from uploaded documents.
@@ -13,9 +16,6 @@ If the context is empty or does not contain the answer, say clearly that you don
 Keep answers short and clear.
 Do not invent facts outside the context."""
 
-# Simple in-memory session store for chat continuity.
-# Format: {session_id: [{"role": "user|assistant", "text": "..."}]}
-SESSION_MEMORY: dict[str, list[dict[str, str]]] = {}
 MAX_MEMORY_TURNS = 6
 
 
@@ -42,31 +42,46 @@ def _build_context(hits: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
-def _ensure_session(session_id: str | None) -> str:
+def _ensure_session(session_id: str | None, user_id: int, db: Session) -> str:
     if session_id:
-        SESSION_MEMORY.setdefault(session_id, [])
-        return session_id
+        session = db.scalar(
+            select(ChatSession).where(
+                ChatSession.id == session_id, ChatSession.user_id == user_id
+            )
+        )
+        if not session:
+            raise ValueError("Chat session not found")
+        return session.id
     new_session_id = uuid.uuid4().hex
-    SESSION_MEMORY[new_session_id] = []
+    db.add(ChatSession(id=new_session_id, user_id=user_id))
+    db.commit()
     return new_session_id
 
 
-def _history_text(session_id: str) -> str:
-    turns = SESSION_MEMORY.get(session_id, [])
+def _history_text(session_id: str, db: Session) -> str:
+    turns = db.scalars(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(MAX_MEMORY_TURNS * 2)
+    ).all()
     if not turns:
         return "(no previous chat history)"
 
-    recent = turns[-(MAX_MEMORY_TURNS * 2) :]
-    lines = [f"{turn['role']}: {turn['text']}" for turn in recent]
-    return "\n".join(lines)
+    return "\n".join(f"{turn.role}: {turn.text}" for turn in reversed(turns))
 
 
-def _append_turn(session_id: str, role: str, text: str) -> None:
-    SESSION_MEMORY.setdefault(session_id, []).append({"role": role, "text": text})
+def _append_turn(session_id: str, role: str, text: str, db: Session) -> None:
+    db.add(ChatMessage(session_id=session_id, role=role, text=text))
+    db.commit()
 
 
 def answer_with_rag(
-    question: str, top_k: int | None = None, session_id: str | None = None
+    question: str,
+    top_k: int | None = None,
+    session_id: str | None = None,
+    user_id: int = 0,
+    db: Session | None = None,
 ) -> dict:
     """
     Phase 5 pipeline (+ basic memory):
@@ -75,12 +90,14 @@ def answer_with_rag(
     3) history + context + question → Gemini
     4) answer + sources + session_id
     """
-    current_session = _ensure_session(session_id)
+    if db is None:
+        raise ValueError("Database session required")
+    current_session = _ensure_session(session_id, user_id, db)
 
     query_vec = embed_query(question)
-    hits = search_chunks(query_vec, top_k=top_k)
+    hits = search_chunks(query_vec, top_k=top_k, user_id=user_id)
     context = _build_context(hits)
-    history = _history_text(current_session)
+    history = _history_text(current_session, db)
 
     user_prompt = (
         f"Chat History:\n{history}\n\n"
@@ -97,8 +114,8 @@ def answer_with_rag(
     )
     answer = (response.text or "").strip()
 
-    _append_turn(current_session, "user", question)
-    _append_turn(current_session, "assistant", answer)
+    _append_turn(current_session, "user", question, db)
+    _append_turn(current_session, "assistant", answer, db)
 
     sources = [
         {
