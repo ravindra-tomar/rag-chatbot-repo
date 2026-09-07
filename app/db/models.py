@@ -23,6 +23,7 @@ class Document(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     filename: Mapped[str] = mapped_column(String(255))
+    content_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     saved_path: Mapped[str] = mapped_column(String(500))
     char_count: Mapped[int] = mapped_column(default=0)
     chunk_count: Mapped[int] = mapped_column(default=0)

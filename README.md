@@ -91,9 +91,30 @@ Swagger docs:
 
 ### Documents
 - `POST /api/v1/documents/upload` (Bearer token + form-data: `file`)
+- `POST /api/v1/documents/upload-multiple` (Bearer token + repeated form-data: `files`)
 - `GET /api/v1/documents` (Bearer token)
 - `DELETE /api/v1/documents/{doc_id}` (Bearer token)
 - `POST /api/v1/documents/search` (Bearer token)
+
+Uploads are deduplicated per user using a SHA-256 content hash. Re-uploading the
+same content returns `status: duplicate` without creating new vectors. Uploading
+changed content with the same filename re-indexes the new file and removes the
+previous version. New files are appended to the existing knowledge base.
+
+### Frontend
+
+The React/Vite frontend is in `frontend/` and includes authentication, chat,
+multi-file upload, document management, duplicate/update status, and source
+citations.
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. The frontend expects the API at
+`http://127.0.0.1:8000`; set `VITE_API_URL` if the backend runs elsewhere.
 
 ### Authentication
 - `POST /api/v1/auth/register`
