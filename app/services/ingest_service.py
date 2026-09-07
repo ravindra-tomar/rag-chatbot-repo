@@ -1,3 +1,4 @@
+import hashlib
 import json
 import uuid
 from pathlib import Path
@@ -24,6 +25,20 @@ def _upload_dir() -> Path:
 
 def _meta_path(doc_id: str) -> Path:
     return _upload_dir() / f"{doc_id}.meta.json"
+
+
+def _document_meta(document: Document) -> dict:
+    meta_file = _meta_path(document.id)
+    if meta_file.exists():
+        return json.loads(meta_file.read_text(encoding="utf-8"))
+    return {
+        "doc_id": document.id,
+        "filename": document.filename,
+        "char_count": document.char_count,
+        "chunk_count": document.chunk_count,
+        "vectors_stored": document.vectors_stored,
+        "chunks": [],
+    }
 
 
 def list_documents(db: Session, user_id: int) -> list[dict]:
@@ -101,6 +116,25 @@ async def ingest_upload(file: UploadFile, user_id: int, db: Session) -> dict:
     if len(content) > max_size:
         raise ValueError(f"File size {settings.MAX_UPLOAD_SIZE_MB} MB se zyada nahi ho sakti.")
 
+    content_hash = hashlib.sha256(content).hexdigest()
+    duplicate = db.scalar(
+        select(Document).where(
+            Document.user_id == user_id,
+            Document.content_hash == content_hash,
+        )
+    )
+    if duplicate:
+        meta = _document_meta(duplicate)
+        meta.update({"status": "duplicate", "duplicate": True})
+        return meta
+
+    previous = db.scalar(
+        select(Document).where(
+            Document.user_id == user_id,
+            Document.filename == file.filename,
+        )
+    )
+
     saved_path.write_bytes(content)
     try:
         text = extract_text(saved_path)
@@ -143,6 +177,7 @@ async def ingest_upload(file: UploadFile, user_id: int, db: Session) -> dict:
                 id=doc_id,
                 user_id=user_id,
                 filename=file.filename,
+                content_hash=content_hash,
                 saved_path=str(saved_path),
                 char_count=len(text),
                 chunk_count=len(chunks),
@@ -150,6 +185,12 @@ async def ingest_upload(file: UploadFile, user_id: int, db: Session) -> dict:
             )
         )
         db.commit()
+        if previous:
+            delete_document(previous.id, user_id, db)
+            meta["status"] = "updated"
+        else:
+            meta["status"] = "created"
+        meta["duplicate"] = False
         return meta
     except Exception:
         delete_doc(doc_id, user_id=user_id)

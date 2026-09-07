@@ -7,6 +7,7 @@ from app.schemas.document import (
     DocumentIngestResponse,
     DocumentListResponse,
     DocumentSummary,
+    MultiDocumentIngestResponse,
     SearchHit,
     SearchRequest,
     SearchResponse,
@@ -19,6 +20,27 @@ from app.db.database import get_db
 from app.db.models import User
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+
+def _ingest_response(meta: dict) -> DocumentIngestResponse:
+    previews = [
+        ChunkPreview(
+            chunk_index=i,
+            text=(chunk[:120] + ("..." if len(chunk) > 120 else "")),
+            char_count=len(chunk),
+        )
+        for i, chunk in enumerate(meta["chunks"])
+    ]
+    return DocumentIngestResponse(
+        doc_id=meta["doc_id"],
+        filename=meta["filename"],
+        char_count=meta["char_count"],
+        chunk_count=meta["chunk_count"],
+        vectors_stored=meta["vectors_stored"],
+        chunks=previews,
+        status=meta.get("status", "created"),
+        duplicate=meta.get("duplicate", False),
+    )
 
 
 @router.post("/upload", response_model=DocumentIngestResponse)
@@ -37,23 +59,24 @@ async def upload_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ingest failed: {e}")
 
-    previews = [
-        ChunkPreview(
-            chunk_index=i,
-            text=(chunk[:120] + ("..." if len(chunk) > 120 else "")),
-            char_count=len(chunk),
-        )
-        for i, chunk in enumerate(meta["chunks"])
-    ]
+    return _ingest_response(meta)
 
-    return DocumentIngestResponse(
-        doc_id=meta["doc_id"],
-        filename=meta["filename"],
-        char_count=meta["char_count"],
-        chunk_count=meta["chunk_count"],
-        vectors_stored=meta["vectors_stored"],
-        chunks=previews,
-    )
+
+@router.post("/upload-multiple", response_model=MultiDocumentIngestResponse)
+async def upload_multiple_documents(
+    files: list[UploadFile] = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    results = []
+    for file in files:
+        try:
+            results.append(_ingest_response(await ingest_upload(file, current_user.id, db)))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"{file.filename}: {e}") from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"{file.filename}: ingest failed: {e}") from e
+    return MultiDocumentIngestResponse(count=len(results), documents=results)
 
 
 @router.get("", response_model=DocumentListResponse)

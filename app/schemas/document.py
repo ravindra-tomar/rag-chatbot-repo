@@ -14,6 +14,13 @@ class DocumentIngestResponse(BaseModel):
     chunk_count: int
     vectors_stored: int
     chunks: list[ChunkPreview]
+    status: str = "created"
+    duplicate: bool = False
+
+
+class MultiDocumentIngestResponse(BaseModel):
+    count: int
+    documents: list[DocumentIngestResponse]
 
 
 class SearchRequest(BaseModel):

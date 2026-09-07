@@ -65,6 +65,28 @@ def test_upload_endpoint_with_mocked_ingestion(monkeypatch):
     assert response.json()["vectors_stored"] == 1
 
 
+def test_multiple_upload_endpoint_with_mocked_ingestion(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.v1.documents.ingest_upload", fake_ingest_upload
+    )
+
+    response = client.post(
+        "/api/v1/documents/upload-multiple",
+        files=[
+            ("files", ("policy-a.txt", b"policy a", "text/plain")),
+            ("files", ("policy-b.txt", b"policy b", "text/plain")),
+        ],
+        headers=auth_headers("multiple-upload-tests@example.com"),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 2
+    assert [item["filename"] for item in response.json()["documents"]] == [
+        "policy-a.txt",
+        "policy-b.txt",
+    ]
+
+
 def test_chat_endpoint_with_mocked_rag(monkeypatch):
     monkeypatch.setattr(
         "app.api.v1.chat.answer_with_rag", fake_answer_with_rag
