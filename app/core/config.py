@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-this-secret-key-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     MAX_UPLOAD_SIZE_MB: int = 10
+    FRONTEND_URL: str = ""
 
     # Phase 3: documents
     UPLOAD_DIR: str = "./data/uploads"

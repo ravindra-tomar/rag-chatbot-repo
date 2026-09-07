@@ -177,7 +177,7 @@ Notes:
 
 ## Docker Deployment
 
-Copy `.env.example` to `.env`, set `GEMINI_API_KEY`, `SECRET_KEY`, and `POSTGRES_PASSWORD`, then run:
+Set `GEMINI_API_KEY`, `SECRET_KEY`, and `POSTGRES_PASSWORD` in your local environment, then run:
 
 ```powershell
 docker compose up --build
@@ -187,4 +187,40 @@ The API will be available at `http://localhost:8000/docs`.
 
 For Railway, deploy this repository as a Docker service, add a PostgreSQL service,
 then set `DATABASE_URL` to Railway's PostgreSQL connection string. Add the required
-variables from `.env.example` in Railway Variables. Railway provides `PORT` automatically.
+variables in Railway Variables. Railway provides `PORT` automatically.
+
+## Railway + Vercel Deployment
+
+1. Deploy the repository from GitHub to Railway. Railway uses the root `Dockerfile`.
+2. Add a Railway PostgreSQL service and reference its `DATABASE_URL` from the API service.
+3. Add `GEMINI_API_KEY`, `SECRET_KEY`, `FRONTEND_URL`, and the runtime values listed below.
+4. Generate a Railway public domain and verify `/health` and `/docs`.
+5. Add a Railway volume mounted at `/app/data` so uploads and Chroma vectors persist.
+6. Import the same repository into Vercel and set the root directory to `frontend`.
+7. Set the Vercel build command to `npm run build` and output directory to `dist`.
+8. Set Vercel variable `VITE_API_URL` to the Railway API URL, then redeploy.
+9. Set Railway variable `FRONTEND_URL` to the Vercel URL, then redeploy the API.
+
+Railway API variables to add in the service dashboard:
+
+```text
+APP_NAME=RAG Chatbot
+CHAT_MODEL=gemini-3.6-flash
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+MAX_UPLOAD_SIZE_MB=10
+FRONTEND_URL=https://your-frontend.vercel.app
+UPLOAD_DIR=/app/data/uploads
+CHROMA_PATH=/app/data/chroma
+CHROMA_COLLECTION=documents
+EMBEDDING_MODEL=gemini-embedding-001
+CHUNK_SIZE=800
+CHUNK_OVERLAP=150
+TOP_K=4
+```
+
+Add `DATABASE_URL` using the PostgreSQL service reference. Add
+`GEMINI_API_KEY` and `SECRET_KEY` as secret variables. Do not add `PORT`; Railway
+provides it automatically.
+
+The Docker image runs `alembic upgrade head` before starting Uvicorn. Never commit
+`.env`, API keys, database passwords, `frontend/node_modules`, or `frontend/dist`.
