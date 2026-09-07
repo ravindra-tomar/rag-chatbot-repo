@@ -8,12 +8,20 @@ from app.core.config import settings
 
 app = FastAPI(title=settings.APP_NAME)
 
+cors_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+if settings.FRONTEND_URL:
+    cors_origins.extend(
+        origin.strip()
+        for origin in settings.FRONTEND_URL.split(",")
+        if origin.strip()
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
